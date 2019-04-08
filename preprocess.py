@@ -40,6 +40,7 @@ def get_mean(subjects, picks='all'):
 
 @mem.cache()
 def project_common_space(subjects, rank=65, picks='all'):
+    print("projecting in the common space")
     C = get_mean(subjects, picks=picks)
     d, V = np.linalg.eigh(C)
     d = d[::-1]
@@ -56,6 +57,7 @@ def project_common_space(subjects, rank=65, picks='all'):
 
 @mem.cache()
 def project_own_space(subjects, rank=65, picks='all'):
+    print("projecting in the own space")
     X, y = get_covs_and_ages(subjects, picks=picks)
     n_subj, _, _, _ = X.shape
     op = np.zeros((n_subj, 9, rank, rank))
@@ -72,16 +74,15 @@ def project_own_space(subjects, rank=65, picks='all'):
 
 @mem.cache()
 def project_tangent_space(subjects, rank=65, picks="all", mode="common"):
+    print("projecting in the tangent space")
     if mode == "common":
         X, y = project_common_space(subjects, rank, picks)
     else:
         X, y = project_common_space(subjects, rank, picks)
-    n_subjects, n_freqs, n_features, _ = X.shape
-    ts = np.zeros((n_subjects, n_freqs,
-                   int(n_features * (n_features + 1) / 2)))
-    for s in range(n_subjects):
-        for f in range(n_freqs):
-            ts[s, f] = TangentSpace().fit_transform(X[s, f])
+    n_subj, n_freqs, p, _ = X.shape
+    ts = np.zeros((n_subj, n_freqs, int(p * (p+1)/2)))
+    for f in range(n_freqs):
+        ts[:, f, :] = TangentSpace().fit_transform(X[:, f, :, :])
     return ts, y
 
 
