@@ -38,9 +38,9 @@ cv = KFold(n_splits=10, shuffle=True, random_state=seed)
 ridge = make_pipeline(StandardScaler(),
                       RidgeCV(alphas=np.logspace(-3, 5, 100)))
 t = time()
-score = cross_val_score(ridge, X, y, cv=cv,
-                        scoring="neg_mean_absolute_error")
-print(f"Mean MAE = {- score.mean()}")
+score = - cross_val_score(ridge, X, y, cv=cv,
+                          scoring="neg_mean_absolute_error")
+print(f"Mean MAE = {score.mean()}")
 print(f"run in {time() - t} seconds")
 
 # lasso = make_pipeline(ts, Lasso())
