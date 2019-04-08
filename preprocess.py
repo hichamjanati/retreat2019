@@ -19,6 +19,9 @@ def get_covs_and_ages(subjects, scale=1e22, picks='all'):
         c = scale * data[subject]['covs']
         if picks == 'mag':
             c = c[:, 2::3, :][:, :, 2::3]
+        elif picks == 'grad':
+            m = np.arange(306).reshape(102, 3)[:, :2].ravel()
+            c = c[:, m, :][:, :, m]
         covs.append(c)
     ids = [data[subject]['subject'] for subject in subjects]
     df = pd.read_csv('data/participants.csv')

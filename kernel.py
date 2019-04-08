@@ -13,17 +13,18 @@ mem = Memory(location='.', verbose=0)
 
 
 @mem.cache()
-def compute_distances(subjects, rank=65, mode='common', metric='riemann'):
+def compute_distances(subjects, rank=65, mode='common', metric='riemann',
+                      picks='mag'):
     print('computing projections')
     X, y = {'common': project_common_space,
-            'own': project_own_space}[mode](subjects, rank)
+            'own': project_own_space}[mode](subjects, rank, picks=picks)
     print('computing distances')
     n_subjects, n_freqs, p, _ = X.shape
     D = np.zeros((n_freqs, n_subjects, n_subjects))
     for freq in range(n_freqs):
         for i in range(n_subjects):
-            print('\rFreq {}, done {}/{}'.format(freq, i+1, n_subjects,
-                                                 end='', flush=True))
+            print('\rFreq {}, done {}/{}'.format(freq, i+1, n_subjects),
+                  end="", flush=True)
             for j in range(i+1):
                 A = X[i, freq]
                 B = X[j, freq]
@@ -35,16 +36,20 @@ def compute_distances(subjects, rank=65, mode='common', metric='riemann'):
 
 if __name__ == '__main__':
     subjects = np.arange(640)
-    D, y = compute_distances(subjects)
+    D, y = compute_distances(subjects, picks='mag', rank=30)
     gamma = 0.1
-    K = np.exp(-D * gamma)
 
-    def kernel(i, j, f=3):
-        return K[f, int(i), int(j)]
-    krr = GridSearchCV(KernelRidge(kernel=kernel), cv=5,
-                       param_grid={"alpha": np.logspace(-7, -3, 5)})
-    # krr = KernelRidge(alpha=1, kernel=kernel, kernel_params={'gamma': gamma})
+    def kernel(i, j, f=3, gamma=0.1):
+        return np.exp(-D[f, int(i), int(j)] * gamma)
     cv = KFold(n_splits=10, shuffle=True)
+    kernel_grids = [dict(gamma=gamma) for gamma in np.logspace(-3, 1, 10)]
+    krr = GridSearchCV(KernelRidge(kernel=kernel), cv=cv,
+                       scoring='neg_mean_absolute_error',
+                       param_grid={"alpha": np.logspace(-5, 0, 10),
+                                   "kernel_params": kernel_grids},
+                       verbose=1, n_jobs=3)
+    # krr = KernelRidge(alpha=1, kernel=kernel, kernel_params={'gamma': gamma})
+
     X = subjects.reshape(640, 1)
-    cv_s = cross_val_score(krr, X,  y, cv=cv, n_jobs=2,
-                           scoring='neg_mean_absolute_error')
+    krr.fit(X, y)
+    print(krr.best_score_)
