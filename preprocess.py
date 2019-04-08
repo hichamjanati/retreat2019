@@ -3,6 +3,7 @@ import numpy as np
 import mne
 import pandas as pd
 from joblib import Memory
+from pyriemann.tangentspace import TangentSpace
 
 
 mem = Memory(location='.', verbose=0)
@@ -67,6 +68,21 @@ def project_own_space(subjects, rank=65, picks='all'):
         for j in range(9):
             op[subject, j] = proj_mat.dot(X[subject, j]).dot(proj_mat.T)
     return op, y
+
+
+@mem.cache()
+def project_tangent_space(subjects, rank=65, picks="all", mode="common"):
+    if mode == "common":
+        X, y = project_common_space(subjects, rank, picks)
+    else:
+        X, y = project_common_space(subjects, rank, picks)
+    n_subjects, n_freqs, n_features, _ = X.shape
+    ts = np.zeros((n_subjects, n_freqs,
+                   int(n_features * (n_features + 1) / 2)))
+    for s in range(n_subjects):
+        for f in range(n_freqs):
+            ts[s, f] = TangentSpace().fit_transform(X[s, f])
+    return ts, y
 
 
 if __name__ == '__main__':
