@@ -93,8 +93,12 @@ def project_tangent_space(subjects, rank=65, picks="all", mode="common",
             for f in range(n_freqs):
                 X[i, f] += reg * np.eye(p)
     ts = np.zeros((n_subj, n_freqs, int(p * (p+1)/2)))
+    n_s_train = 100
+
     for f in range(n_freqs):
-        ts[:, f, :] = TangentSpace().fit_transform(X[:, f, :, :])
+        sl = np.random.permutation(np.arange(640))[:n_s_train]
+        ts[:, f, :] = TangentSpace().fit(
+                        X[sl, f, :, :]).transform(X[:, f, :, :])
     return ts, y
 
 
