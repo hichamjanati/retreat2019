@@ -40,13 +40,14 @@ def get_mean(subjects, picks='all'):
 
 @mem.cache()
 def project_common_space(subjects, rank=65, picks='all'):
-    print("projecting in the common space")
+
     C = get_mean(subjects, picks=picks)
     d, V = np.linalg.eigh(C)
     d = d[::-1]
     V = V[:, ::-1]
     proj_mat = V[:, :rank].T
     X, y = get_covs_and_ages(subjects, picks=picks)
+    print("projecting in the common space")
     n_subj, _, _, _ = X.shape
     op = np.zeros((n_subj, 9, rank, rank))
     for subject in subjects:
@@ -57,8 +58,9 @@ def project_common_space(subjects, rank=65, picks='all'):
 
 @mem.cache()
 def project_own_space(subjects, rank=65, picks='all'):
-    print("projecting in the own space")
+
     X, y = get_covs_and_ages(subjects, picks=picks)
+    print("projecting in the own space")
     n_subj, _, _, _ = X.shape
     op = np.zeros((n_subj, 9, rank, rank))
     for subject in subjects:
@@ -72,14 +74,24 @@ def project_own_space(subjects, rank=65, picks='all'):
     return op, y
 
 
+def project_covariances(subjects, rank=65, picks="all", mode="common"):
+    return {'common': project_common_space,
+            'own': project_own_space}[mode](subjects, rank, picks=picks)
+
+
 @mem.cache()
-def project_tangent_space(subjects, rank=65, picks="all", mode="common"):
-    print("projecting in the tangent space")
+def project_tangent_space(subjects, rank=65, picks="all", mode="common",
+                          reg=1e-6):
     if mode == "common":
         X, y = project_common_space(subjects, rank, picks)
     else:
         X, y = project_common_space(subjects, rank, picks)
+    print("projecting in the tangent space")
     n_subj, n_freqs, p, _ = X.shape
+    if reg:
+        for i in range(n_subj):
+            for f in range(n_freqs):
+                X[i, f] += reg * np.eye(p)
     ts = np.zeros((n_subj, n_freqs, int(p * (p+1)/2)))
     for f in range(n_freqs):
         ts[:, f, :] = TangentSpace().fit_transform(X[:, f, :, :])
