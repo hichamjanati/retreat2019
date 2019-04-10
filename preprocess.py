@@ -84,8 +84,10 @@ def project_tangent_space(subjects, rank=65, picks="all", mode="common",
                           reg=1e-6):
     if mode == "common":
         X, y = project_common_space(subjects, rank, picks)
-    else:
+    elif mode == 'own':
         X, y = project_common_space(subjects, rank, picks)
+    else:
+        X, y = get_covs_and_ages(subjects, picks=picks)
     print("projecting in the tangent space")
     n_subj, n_freqs, p, _ = X.shape
     if reg:
