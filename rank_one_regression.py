@@ -50,13 +50,18 @@ def fit(alpha, beta, X, y, lbda, mu):
     return x[:q], x[q:]
 
 
-def alternate(alpha, beta, X, y, lbda, mu, max_iter=100):
+def alternate(alpha, beta, X, y, lbda, mu, max_iter=1000, tol=1e-5):
     n, p, q = X.shape
     for i in range(max_iter):
         # Beta
         aX = X.dot(alpha)
         G = aX.T.dot(aX) / n + mu * np.eye(p)
         beta = np.linalg.solve(G, y.dot(aX) / n)
+        beta /= np.linalg.norm(beta)
+        if i % 10 == 0 and i > 0:
+            _, g, _ = gradient_and_loss(alpha, beta, X, y, lbda, mu)
+            if np.max(np.abs(g)) < tol:
+                break
         # Alpha
         bX = beta.dot(X)
         G = bX.dot(bX.T) / n + lbda * np.eye(n)
@@ -70,11 +75,15 @@ class RoneRIDGE(BaseEstimator, RegressorMixin):
         self.mu = mu
         self.rng = check_random_state(rng)
 
-    def fit(self, X, y):
+    def fit(self, X, y, solver='alternate'):
         n, p, q = X.shape
         alpha0 = self.rng.randn(q)
         beta0 = self.rng.randn(p)
-        alpha, beta = fit(alpha0, beta0, X, y, self.lbda, self.mu)
+        if solver == 'alternate':
+            alpha, beta = alternate(alpha0, beta0, X, np.array(y), self.lbda,
+                                    self.mu, max_iter=100)
+        else:
+            alpha, beta = fit(alpha0, beta0, X, y, self.lbda, self.mu)
         self.alpha_ = alpha
         self.beta_ = beta
         return self
@@ -93,11 +102,11 @@ if __name__ == '__main__':
     # X = X.reshape(len(X), -1)
     # X = StandardScaler().fit_transform(X)
     # X = X.reshape(n, p, q)
-    cv = KFold(n_splits=3, shuffle=True)
-    model = GridSearchCV(RoneRIDGE(rng=seed), cv=cv,
-                         scoring='neg_mean_absolute_error',
-                         param_grid={'lbda': np.logspace(-3, 5, 1),
-                                     'mu': np.logspace(-3, 5, 2)},
-                         verbose=1, n_jobs=3)
-    model.fit(X, y)
-    print(-model.best_score_)
+    # cv = KFold(n_splits=3, shuffle=True)
+    # model = GridSearchCV(RoneRIDGE(rng=seed), cv=cv,
+    #                      scoring='neg_mean_absolute_error',
+    #                      param_grid={'lbda': np.logspace(-3, 5, 1),
+    #                                  'mu': np.logspace(-3, 5, 2)},
+    #                      verbose=1, n_jobs=3)
+    # model.fit(X, y)
+    # print(-model.best_score_)

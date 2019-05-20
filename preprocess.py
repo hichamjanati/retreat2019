@@ -1,9 +1,12 @@
 import numpy as np
 
+from scipy.linalg import eigh
 import mne
 import pandas as pd
 from joblib import Memory
 from pyriemann.tangentspace import TangentSpace
+from sym_rank import TangentSpace as TangentSpace_
+from common_space import project_space as pcs
 
 
 mem = Memory(location='.', verbose=0)
@@ -27,7 +30,35 @@ def get_covs_and_ages(subjects, scale=1e22, picks='all'):
     ids = [data[subject]['subject'] for subject in subjects]
     df = pd.read_csv('data/participants.csv')
     ages = [int(df[df['Observations'] == subj]['age']) for subj in ids]
-    return np.array(covs), ages
+    return np.array(covs), np.array(ages)
+
+
+def shrinkage(C, alpha):
+    n, _ = C.shape
+    return (1 - alpha) * C + alpha * np.trace(C) * np.eye(n) / n
+
+
+@mem.cache()
+def spoc(subjects, rank=40, picks='all'):
+    print('spoc')
+    X, y = get_covs_and_ages(subjects, picks=picks)
+    n_s, n_f, p, _ = X.shape
+    X_o = np.zeros((n_s, n_f, rank, rank))
+    y_ = y - y.mean()
+    y_ /= np.std(y_)
+    for i in range(n_f):
+        Cw = np.mean(y_[:, None, None] * X[:, i], axis=0)
+        C = np.mean(X[:, i], axis=0)
+        C = shrinkage(C, 0.5)
+        Cw = shrinkage(C, 0.5)
+        eigvals, eigvecs = eigh(Cw, C)
+        eigvals = eigvals.real
+        eigvecs = eigvecs.real
+        order = np.argsort(np.abs(eigvals))[::-1][:rank]
+        proj_mat = eigvecs[:, order].T
+        for subject in subjects:
+            X_o[subject, i] = proj_mat.dot(X[subject, i]).dot(proj_mat.T)
+    return X_o, y
 
 
 @mem.cache()
@@ -86,6 +117,14 @@ def project_tangent_space(subjects, rank=65, picks="all", mode="common",
         X, y = project_common_space(subjects, rank, picks)
     elif mode == 'own':
         X, y = project_common_space(subjects, rank, picks)
+    elif mode == 'spoc':
+        X, y = spoc(subjects, rank, picks)
+    elif mode == "csf":
+        X, y = get_covs_and_ages(subjects, picks=picks)
+        X = pcs(X, rank, common_f=True)
+    elif mode == "cs":
+        X, y = get_covs_and_ages(subjects, picks=picks)
+        X = pcs(X, rank, common_f=False)
     else:
         X, y = get_covs_and_ages(subjects, picks=picks)
     print("projecting in the tangent space")
@@ -96,11 +135,24 @@ def project_tangent_space(subjects, rank=65, picks="all", mode="common",
                 X[i, f] += reg * np.eye(p)
     ts = np.zeros((n_subj, n_freqs, int(p * (p+1)/2)))
     n_s_train = 100
-
     for f in range(n_freqs):
         sl = np.random.permutation(np.arange(640))[:n_s_train]
         ts[:, f, :] = TangentSpace().fit(
                         X[sl, f, :, :]).transform(X[:, f, :, :])
+    return ts, y
+
+
+@mem.cache()
+def project_tangent_space_rank(subjects, rank=65, picks="all"):
+    X, y = get_covs_and_ages(subjects, picks=picks)
+    print("projecting in the tangent space")
+    n_subj, n_freqs, p, _ = X.shape
+    ts = np.zeros((n_subj, n_freqs, p * rank))
+    n_s_train = 100
+    for f in range(n_freqs):
+        sl = np.random.permutation(np.arange(640))[:n_s_train]
+        ts[:, f, :] = TangentSpace_(rank).fit(
+                        X[sl, f, :, :]).transform(X[:, f, :, :], verbose=True)
     return ts, y
 
 
